@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BarberPass</title>
+<style>
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:#fff;
+  color:#111;
+}
+.app{
+  max-width:500px;
+  margin:30px auto;
+  padding:20px;
+}
+h1{text-align:center;margin-bottom:20px}
+.input, select{
+  width:100%;
+  padding:10px;
+  margin-bottom:10px;
+  font-size:14px;
+  border-radius:6px;
+  border:1px solid #ccc;
+}
+button{
+  width:100%;
+  padding:12px;
+  margin-top:8px;
+  font-size:14px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+}
+.btn-primary{background:#222;color:#fff}
+.btn-secondary{background:#eee;color:#111;border:1px solid #ccc}
+.list{
+  margin-top:20px;
+  max-height:300px;
+  overflow:auto;
+  border-top:1px solid #ccc;
+  padding-top:10px;
+}
+.item{
+  padding:8px;
+  border-bottom:1px solid #eee;
+  font-size:14px;
+}
+.admin-toggle{
+  position:fixed;
+  bottom:10px;
+  right:10px;
+  font-size:12px;
+  background:#eee;
+  color:#111;
+  padding:6px 8px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.admin-panel{
+  position:fixed;
+  bottom:50px;
+  right:10px;
+  width:280px;
+  display:none;
+  background:#fff;
+  border:1px solid #ccc;
+  padding:10px;
+  border-radius:8px;
+}
+.summary{
+  margin-top:10px;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:6px;
+  background:#f9f9f9;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>BarberPass</h1>
+  <input type="date" id="date" class="input">
+  <select id="service" class="input">
+    <option value="">Serviço</option>
+    <option value="Corte e Barba">Corte e Barba</option>
+    <option value="Corte">Corte</option>
+    <option value="Barba">Barba</option>
+    <option value="Selagem">Selagem</option>
+    <option value="Sobrancelha">Sobrancelha</option>
+    <option value="Tintura Barba">Tintura Barba</option>
+  </select>
+  <div id="times" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+  <input type="text" id="name" placeholder="Nome" class="input">
+  <input type="tel" id="phone" placeholder="Telefone" class="input">
+
+  <div class="summary" id="summary">
+    <strong>Resumo:</strong>
+    <div>Data: -</div>
+    <div>Horário: -</div>
+    <div>Serviço: -</div>
+  </div>
+
+  <button id="bookBtn" class="btn btn-primary" disabled>Agendar</button>
+  <button id="mineBtn" class="btn btn-secondary">Meus Agendamentos</button>
+  <button id="cancelBtn" class="btn btn-secondary">Cancelar</button>
+  <div id="bookingsList" class="list"></div>
+</div>
+
+<button class="admin-toggle" id="adminToggle">Adm</button>
+<div class="admin-panel" id="adminPanel">
+  <input id="admUser" class="input" placeholder="Usuário">
+  <input id="admPass" class="input" placeholder="Senha" type="password">
+  <button id="admLogin" class="btn btn-primary">Entrar</button>
+  <button id="admClose" class="btn btn-secondary">Fechar</button>
+</div>
+
+<script>
+const START=8,END=20,LUNCH=[12,13],CLOSED_DAY=2; // Terça=2
+const PRICES={"Corte e Barba":100,"Corte":50,"Barba":50,"Selagem":120,"Sobrancelha":10,"Tintura Barba":35};
+const KEY="bp_simple_summary";
+let bookings=JSON.parse(localStorage.getItem(KEY)||"[]");
+
+const dateIn=document.getElementById("date");
+const serviceSel=document.getElementById("service");
+const nameIn=document.getElementById("name");
+const phoneIn=document.getElementById("phone");
+const timesWrap=document.getElementById("times");
+const bookBtn=document.getElementById("bookBtn");
+const mineBtn=document.getElementById("mineBtn");
+const cancelBtn=document.getElementById("cancelBtn");
+const bookingsList=document.getElementById("bookingsList");
+const summary=document.getElementById("summary");
+let selected=null;
+
+dateIn.min=(new Date()).toISOString().slice(0,10);
+renderList();
+
+dateIn.addEventListener("change",buildTimes);
+serviceSel.addEventListener("change",checkEnable);
+nameIn.addEventListener("input",checkEnable);
+phoneIn.addEventListener("input",checkEnable);
+bookBtn.addEventListener("click",confirmBooking);
+mineBtn.addEventListener("click",showMine);
+cancelBtn.addEventListener("click",cancelFlow);
+
+/* Admin corrigido */
+const adminToggle=document.getElementById("adminToggle");
+const adminPanel=document.getElementById("adminPanel");
+const admUser=document.getElementById("admUser");
+const admPass=document.getElementById("admPass");
+const admLogin=document.getElementById("admLogin");
+const admClose=document.getElementById("admClose");
+
+adminToggle.addEventListener("click",()=>{
+  adminPanel.style.display = adminPanel.style.display==="block"?"none":"block";
+});
+
+admClose.addEventListener("click",()=>{
+  adminPanel.style.display="none";
+});
+
+admLogin.addEventListener("click",()=>{
+  const u = admUser.value.trim();
+  const p = admPass.value.trim();
+  if(u==="Raul" && p==="123"){
+    adminPanel.style.display="none";
+    const total = bookings.reduce((s,b)=>s+(b.price||0),0);
+    const w = window.open("","_blank","width=500,height=500");
+    w.document.write(`<body style="font-family:Arial;padding:12px"><h2>Relatório</h2>
+      <p>Total faturamento: R$${total}</p>
+      <pre>${JSON.stringify(bookings,null,2)}</pre>
+    </body>`);
+  } else {
+    alert("Usuário ou senha incorretos!");
+  }
+});
+
+/* Funções agendamento */
+function buildTimes(){
+  selected=null;
+  timesWrap.innerHTML="";
+  bookBtn.disabled=true;
+  summaryUpdate();
+  const d=dateIn.value;
+  if(!d) return;
+  const dt=new Date(d+"T00:00:00");
+  if(dt.getDay()===CLOSED_DAY){ // Terça-feira bloqueada
+    const msg=document.createElement("div");
+    msg.textContent="Horário não disponível";
+    msg.style.color="#ff0000";
+    msg.style.fontWeight="bold";
+    timesWrap.appendChild(msg);
+    return;
+  }
+  for(let h=START;h<END;h++){
+    if(LUNCH.includes(h)) continue; // horário de almoço bloqueado
+    if(bookings.some(b=>b.date===d && b.time===h+":00")) continue;
+    const btn=document.createElement("button");
+    btn.textContent=h+":00";
+    btn.style.flex="1";
+    btn.onclick=()=>{selected=h+":00";Array.from(timesWrap.children).forEach(x=>x.style.border="");btn.style.border="2px solid #111";checkEnable();summaryUpdate();}
+    timesWrap.appendChild(btn);
+  }
+}
+
+function summaryUpdate(){
+  summary.children[1].textContent="Data: "+(dateIn.value||"-");
+  summary.children[2].textContent="Horário: "+(selected||"-");
+  summary.children[3].textContent="Serviço: "+(serviceSel.value||"-");
+}
+
+function checkEnable(){
+  bookBtn.disabled=!(selected && serviceSel.value && nameIn.value.trim() && phoneIn.value.trim());
+  summaryUpdate();
+}
+
+function confirmBooking(){
+  if(bookBtn.disabled) return;
+  const newB={id:Date.now().toString(36),date:dateIn.value,time:selected,service:serviceSel.value,name:nameIn.value.trim(),phone:phoneIn.value.trim(),price:PRICES[serviceSel.value]||0};
+  bookings.push(newB);
+  localStorage.setItem(KEY,JSON.stringify(bookings));
+  selected=null;dateIn.value="";serviceSel.value="";nameIn.value="";phoneIn.value="";timesWrap.innerHTML="";bookBtn.disabled=true;
+  summaryUpdate();
+  renderList();
+  alert("Agendado!");
+}
+
+function renderList(list){
+  const arr=(list||bookings).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  bookingsList.innerHTML="";
+  arr.forEach(b=>{
+    const el=document.createElement("div");
+    el.className="item";
+    el.innerHTML=`<strong>${b.name}</strong> ${b.date} ${b.time} • ${b.service} • R$${b.price}`;
+    bookingsList.appendChild(el);
+  });
+}
+
+function showMine(){
+  const key=prompt("Nome ou telefone:");
+  if(!key) return;
+  renderList(bookings.filter(b=>b.name.toLowerCase().includes(key.toLowerCase())||b.phone.includes(key)));
+}
+
+function cancelFlow(){
+  const id=prompt("ID do agendamento:");
+  if(!id) return;
+  const idx=bookings.findIndex(b=>b.id===id);
+  if(idx===-1){ alert("Não encontrado"); return; }
+  if(!confirm("Confirmar cancelamento?")) return;
+  bookings.splice(idx,1);
+  localStorage.setItem(KEY,JSON.stringify(bookings));
+  renderList();
+}
+</script>
+</body>
+</html>
